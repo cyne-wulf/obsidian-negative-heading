@@ -65,42 +65,39 @@ export default class NegativeHeadingPlugin extends Plugin {
 	}
 
 	private tryPromoteBlock(block: HTMLElement) {
-		let currentBlock: HTMLElement | null = block;
+		if (!this.isEligibleBlock(block)) {
+			return;
+		}
 
-		while (currentBlock && this.isEligibleBlock(currentBlock)) {
-			const rawText = currentBlock.textContent ?? "";
-			if (!hasHeadingToken(rawText)) {
-				break;
-			}
-			if (startsWithInlineCode(currentBlock)) {
-				break;
-			}
+		const doc = block.ownerDocument ?? document;
+		let match = findNextHeadingMatch(block);
 
-			const headingContent = this.extractHeadingContent(currentBlock);
-			if (!headingContent) {
-				break;
-			}
+		while (match) {
+			const range = doc.createRange();
+			const tokenLength = match.tokenLength;
+			const tokenStart = match.offset;
+			range.setStart(match.node, tokenStart + tokenLength);
 
-			const headingEl = this.createHeadingElement(
-				currentBlock.ownerDocument ?? document,
-				headingContent,
-			);
-			if (!headingEl) {
-				break;
-			}
-
-			if (currentBlock.tagName === "LI") {
-				currentBlock.insertBefore(headingEl, currentBlock.firstChild);
+			const lineEnd = findLineEnd(block, match.node, tokenStart + tokenLength);
+			if (lineEnd.type === "break") {
+				range.setEndAfter(lineEnd.node);
 			} else {
-				currentBlock.parentNode?.insertBefore(headingEl, currentBlock);
+				range.setEnd(lineEnd.node, lineEnd.offset);
 			}
 
-			if (!hasVisibleContent(currentBlock)) {
-				currentBlock.remove();
-				currentBlock = null;
-			} else {
-				trimLeadingBreaks(currentBlock);
+			const fragment = range.extractContents();
+			removeTokenFromMatch(match);
+			trimFragmentLeadingWhitespace(fragment);
+
+			if (!fragmentHasVisibleContent(fragment)) {
+				match = findNextHeadingMatch(block);
+				continue;
 			}
+
+			const headingEl = this.createHeadingElement(doc, fragment);
+			range.insertNode(headingEl);
+			removeDelimiterAfterHeading(lineEnd);
+			match = findNextHeadingMatch(block);
 		}
 	}
 
@@ -117,85 +114,17 @@ export default class NegativeHeadingPlugin extends Plugin {
 		return Boolean(block.textContent && block.textContent.length);
 	}
 
-	private extractHeadingContent(block: HTMLElement): DocumentFragment | null {
-		const doc = block.ownerDocument ?? document;
-		const fragment = doc.createDocumentFragment();
-		let node: ChildNode | null = block.firstChild;
-		let consumed = false;
-
-		while (node) {
-			const next = node.nextSibling;
-
-			if (isLineBreakNode(node)) {
-				block.removeChild(node);
-				break;
-			}
-
-			if (node.nodeType === Node.TEXT_NODE) {
-				const textNode = node as Text;
-				const newlineIndex = textNode.nodeValue?.indexOf("\n") ?? -1;
-				if (newlineIndex !== -1) {
-					const currentValue = textNode.nodeValue ?? "";
-					const headingPart = currentValue.slice(0, newlineIndex);
-					const restPart = currentValue.slice(newlineIndex + 1);
-					textNode.nodeValue = restPart;
-					if (headingPart.length) {
-						fragment.appendChild(doc.createTextNode(headingPart));
-						consumed = true;
-						break;
-					}
-					node = textNode;
-					continue;
-				}
-			}
-
-			fragment.appendChild(node);
-			consumed = true;
-			node = next;
-		}
-
-		return consumed ? fragment : null;
-	}
-
 	private createHeadingElement(
 		doc: Document,
 		content: DocumentFragment,
-	): HTMLElement | null {
+	): HTMLElement {
 		const headingEl = doc.createElement("div");
 		headingEl.classList.add("neg-heading", "neg-h1");
 		headingEl.dataset.negHeading = "true";
 		headingEl.setAttribute("role", "heading");
 		headingEl.setAttribute("aria-level", "7");
 		headingEl.appendChild(content);
-		this.injectTokenSpan(headingEl);
 		return headingEl;
-	}
-
-	private injectTokenSpan(block: HTMLElement) {
-		const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-		while (walker.nextNode()) {
-			const textNode = walker.currentNode as Text;
-			const value = textNode.nodeValue ?? "";
-			if (!value.length) {
-				continue;
-			}
-			const match = value.match(NEG_HEADING_TOKEN_REGEX);
-			if (match) {
-				const tokenSpan = block.ownerDocument?.createElement("span");
-				if (tokenSpan) {
-					tokenSpan.classList.add("neg-heading-token");
-					tokenSpan.setAttribute("aria-hidden", "true");
-					tokenSpan.style.display = "none";
-					tokenSpan.textContent = match[0];
-					block.insertBefore(tokenSpan, textNode);
-				}
-				textNode.nodeValue = value.slice(match[0].length);
-				break;
-			}
-			if (value.trim().length) {
-				break;
-			}
-		}
 	}
 
 	private applyCommentColorFallback() {
@@ -299,11 +228,6 @@ function isInExcludedNode(tree: ReturnType<typeof syntaxTree>, pos: number): boo
 	return false;
 }
 
-function hasHeadingToken(text: string): boolean {
-	const trimmed = text.replace(/^\s+/, "");
-	return NEG_HEADING_TOKEN_REGEX.test(trimmed);
-}
-
 function matchesBlockSelector(element: HTMLElement): boolean {
 	return Boolean(
 		element instanceof HTMLElement &&
@@ -312,56 +236,194 @@ function matchesBlockSelector(element: HTMLElement): boolean {
 	);
 }
 
-function startsWithInlineCode(block: HTMLElement): boolean {
-	let node: ChildNode | null = block.firstChild;
-	while (node) {
-		if (node.nodeType === Node.TEXT_NODE) {
-			const value = node.nodeValue ?? "";
-			if (value.trim().length === 0) {
-				node = node.nextSibling;
+interface HeadingMatch {
+	node: Text;
+	offset: number;
+	tokenLength: number;
+}
+
+type LineEndInfo =
+	| { type: "newline"; node: Text; offset: number }
+	| { type: "break"; node: Node }
+	| { type: "end"; node: Node; offset: number };
+
+function findNextHeadingMatch(block: HTMLElement): HeadingMatch | null {
+	const walker = document.createTreeWalker(block, NodeFilter.SHOW_ALL);
+	let atLineStart = true;
+
+	while (walker.nextNode()) {
+		const node = walker.currentNode;
+		if (node.nodeType === Node.ELEMENT_NODE) {
+			const element = node as HTMLElement;
+			if (
+				element.dataset.negHeading === "true" ||
+				element.matches("code, pre, .math, .math-block")
+			) {
 				continue;
 			}
-			return false;
-		}
-		if (node.nodeType === Node.ELEMENT_NODE) {
-			const el = node as HTMLElement;
-			if (el.tagName === "CODE") {
-				return true;
+			if (element.tagName === "BR") {
+				atLineStart = true;
 			}
-			if (el.textContent && el.textContent.trim().length) {
-				return false;
-			}
-		}
-		node = node.nextSibling;
-	}
-	return false;
-}
-
-function isLineBreakNode(node: ChildNode): boolean {
-	return node.nodeName === "BR";
-}
-
-function trimLeadingBreaks(block: HTMLElement) {
-	while (block.firstChild) {
-		const first = block.firstChild;
-		if (first.nodeName === "BR") {
-			block.removeChild(first);
 			continue;
 		}
+
+		const textNode = node as Text;
 		if (
-			first.nodeType === Node.TEXT_NODE &&
-			(first.nodeValue?.trim().length ?? 0) === 0
+			textNode.parentElement?.closest(
+				"code, pre, .math, .math-block, [data-neg-heading='true']",
+			)
 		) {
-			block.removeChild(first);
+			atLineStart = textNode.nodeValue?.endsWith("\n") ?? false;
+			continue;
+		}
+
+		const value = textNode.nodeValue ?? "";
+		let i = 0;
+		while (i < value.length) {
+			const char = value[i];
+			if (char === "\n") {
+				atLineStart = true;
+				i++;
+				continue;
+			}
+			if (atLineStart) {
+				if (char === " " || char === "\t" || char === "\r") {
+					i++;
+					continue;
+				}
+				const slice = value.slice(i);
+				const match = slice.match(NEG_HEADING_TOKEN_REGEX);
+				if (match) {
+					return {
+						node: textNode,
+						offset: i,
+						tokenLength: match[0].length,
+					};
+				}
+				atLineStart = false;
+			}
+			i++;
+		}
+		atLineStart = value.endsWith("\n");
+	}
+
+	return null;
+}
+
+function findLineEnd(
+	root: HTMLElement,
+	startNode: Text,
+	startOffset: number,
+): LineEndInfo {
+	let current: Node = startNode;
+	let offset = startOffset;
+
+	while (current) {
+		if (current.nodeType === Node.TEXT_NODE) {
+			const text = (current as Text).nodeValue ?? "";
+			for (let i = offset; i < text.length; i++) {
+				if (text[i] === "\n") {
+					return { type: "newline", node: current as Text, offset: i };
+				}
+			}
+			offset = text.length;
+		}
+
+		const next = getNextNodeWithin(root, current);
+		if (!next) {
+			break;
+		}
+		if (next.nodeName === "BR") {
+			return { type: "break", node: next };
+		}
+		current = next;
+		offset = current.nodeType === Node.TEXT_NODE ? 0 : 0;
+	}
+
+	if (current.nodeType === Node.TEXT_NODE) {
+		return {
+			type: "end",
+			node: current as Text,
+			offset: ((current as Text).nodeValue ?? "").length,
+		};
+	}
+
+	return { type: "end", node: root, offset: root.childNodes.length };
+}
+
+function getNextNodeWithin(root: Node, node: Node): Node | null {
+	if (node.firstChild) {
+		return node.firstChild;
+	}
+	let current: Node | null = node;
+	while (current && current !== root) {
+		if (current.nextSibling) {
+			return current.nextSibling;
+		}
+		current = current.parentNode;
+	}
+	return null;
+}
+
+function removeTokenFromMatch(match: HeadingMatch) {
+	const value = match.node.nodeValue ?? "";
+	const before = value.slice(0, match.offset);
+	const after = value.slice(match.offset + match.tokenLength);
+	match.node.nodeValue = before + after;
+}
+
+function trimFragmentLeadingWhitespace(fragment: DocumentFragment) {
+	while (fragment.firstChild) {
+		const first = fragment.firstChild;
+		if (first.nodeType === Node.TEXT_NODE) {
+			const value = (first as Text).nodeValue ?? "";
+			const trimmed = value.replace(/^\s+/, "");
+			if (trimmed.length === 0) {
+				fragment.removeChild(first);
+				continue;
+			}
+			if (trimmed !== value) {
+				(first as Text).nodeValue = trimmed;
+			}
+			break;
+		}
+		if (
+			first.nodeType === Node.ELEMENT_NODE &&
+			!(first as HTMLElement).textContent?.trim().length
+		) {
+			fragment.removeChild(first);
 			continue;
 		}
 		break;
 	}
 }
 
-function hasVisibleContent(block: HTMLElement): boolean {
-	if (block.textContent && block.textContent.trim().length) {
-		return true;
+function fragmentHasVisibleContent(fragment: DocumentFragment): boolean {
+	const walker = document.createTreeWalker(
+		fragment,
+		NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+	);
+	while (walker.nextNode()) {
+		const node = walker.currentNode;
+		if (node.nodeType === Node.TEXT_NODE) {
+			if ((node.nodeValue ?? "").trim().length > 0) {
+				return true;
+			}
+		} else if (
+			node.nodeType === Node.ELEMENT_NODE &&
+			(node as HTMLElement).tagName !== "BR"
+		) {
+			return true;
+		}
 	}
-	return Boolean(block.querySelector("img, video, audio, iframe, embed"));
+	return false;
+}
+
+function removeDelimiterAfterHeading(info: LineEndInfo) {
+	if (info.type === "newline") {
+		const text = info.node.nodeValue ?? "";
+		info.node.nodeValue = text.slice(info.offset + 1);
+	} else if (info.type === "break") {
+		info.node.parentNode?.removeChild(info.node);
+	}
 }
