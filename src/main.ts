@@ -65,44 +65,50 @@ export default class NegativeHeadingPlugin extends Plugin {
 	}
 
 	private tryPromoteBlock(block: HTMLElement) {
-		if (!this.isEligibleBlock(block)) {
-			return;
-		}
+		let currentBlock: HTMLElement | null = block;
 
-		const rawText = block.textContent ?? "";
-		if (!hasHeadingToken(rawText)) {
-			return;
-		}
+		while (currentBlock && this.isEligibleBlock(currentBlock)) {
+			const rawText = currentBlock.textContent ?? "";
+			if (!hasHeadingToken(rawText)) {
+				break;
+			}
+			if (startsWithInlineCode(currentBlock)) {
+				break;
+			}
 
-		const headingContent = this.extractHeadingContent(block);
-		if (!headingContent) {
-			return;
-		}
+			const headingContent = this.extractHeadingContent(currentBlock);
+			if (!headingContent) {
+				break;
+			}
 
-		const headingEl = block.ownerDocument?.createElement("div");
-		if (!headingEl) {
-			return;
-		}
+			const headingEl = this.createHeadingElement(
+				currentBlock.ownerDocument ?? document,
+				headingContent,
+			);
+			if (!headingEl) {
+				break;
+			}
 
-		headingEl.classList.add("neg-heading", "neg-h1");
-		headingEl.setAttribute("role", "heading");
-		headingEl.setAttribute("aria-level", "7");
-		headingEl.appendChild(headingContent);
-		this.injectTokenSpan(headingEl);
+			if (currentBlock.tagName === "LI") {
+				currentBlock.insertBefore(headingEl, currentBlock.firstChild);
+			} else {
+				currentBlock.parentNode?.insertBefore(headingEl, currentBlock);
+			}
 
-		if (block.tagName === "LI") {
-			block.insertBefore(headingEl, block.firstChild);
-		} else {
-			block.parentElement?.insertBefore(headingEl, block);
-		}
-
-		if (!block.textContent || !block.textContent.trim().length) {
-			block.remove();
+			if (!hasVisibleContent(currentBlock)) {
+				currentBlock.remove();
+				currentBlock = null;
+			} else {
+				trimLeadingBreaks(currentBlock);
+			}
 		}
 	}
 
 	private isEligibleBlock(block: HTMLElement): boolean {
 		if (!(block instanceof HTMLElement)) {
+			return false;
+		}
+		if (block.dataset.negHeading === "true") {
 			return false;
 		}
 		if (block.closest(DISALLOWED_CONTAINER_SELECTOR)) {
@@ -115,7 +121,7 @@ export default class NegativeHeadingPlugin extends Plugin {
 		const doc = block.ownerDocument ?? document;
 		const fragment = doc.createDocumentFragment();
 		let node: ChildNode | null = block.firstChild;
-		let consumedSomething = false;
+		let consumed = false;
 
 		while (node) {
 			const next = node.nextSibling;
@@ -132,28 +138,37 @@ export default class NegativeHeadingPlugin extends Plugin {
 					const currentValue = textNode.nodeValue ?? "";
 					const headingPart = currentValue.slice(0, newlineIndex);
 					const restPart = currentValue.slice(newlineIndex + 1);
-					textNode.nodeValue = headingPart;
-					if (restPart.length) {
-						const restNode = doc.createTextNode(restPart);
-						block.insertBefore(restNode, next);
+					textNode.nodeValue = restPart;
+					if (headingPart.length) {
+						fragment.appendChild(doc.createTextNode(headingPart));
+						consumed = true;
+						break;
 					}
-					fragment.appendChild(textNode);
-					consumedSomething = true;
-					break;
+					node = textNode;
+					continue;
 				}
 			}
 
 			fragment.appendChild(node);
-			consumedSomething = true;
+			consumed = true;
 			node = next;
 		}
 
-		if (!consumedSomething) {
-			return null;
-		}
+		return consumed ? fragment : null;
+	}
 
-		trimLeadingBreaks(block);
-		return fragment;
+	private createHeadingElement(
+		doc: Document,
+		content: DocumentFragment,
+	): HTMLElement | null {
+		const headingEl = doc.createElement("div");
+		headingEl.classList.add("neg-heading", "neg-h1");
+		headingEl.dataset.negHeading = "true";
+		headingEl.setAttribute("role", "heading");
+		headingEl.setAttribute("aria-level", "7");
+		headingEl.appendChild(content);
+		this.injectTokenSpan(headingEl);
+		return headingEl;
 	}
 
 	private injectTokenSpan(block: HTMLElement) {
@@ -297,16 +312,56 @@ function matchesBlockSelector(element: HTMLElement): boolean {
 	);
 }
 
+function startsWithInlineCode(block: HTMLElement): boolean {
+	let node: ChildNode | null = block.firstChild;
+	while (node) {
+		if (node.nodeType === Node.TEXT_NODE) {
+			const value = node.nodeValue ?? "";
+			if (value.trim().length === 0) {
+				node = node.nextSibling;
+				continue;
+			}
+			return false;
+		}
+		if (node.nodeType === Node.ELEMENT_NODE) {
+			const el = node as HTMLElement;
+			if (el.tagName === "CODE") {
+				return true;
+			}
+			if (el.textContent && el.textContent.trim().length) {
+				return false;
+			}
+		}
+		node = node.nextSibling;
+	}
+	return false;
+}
+
 function isLineBreakNode(node: ChildNode): boolean {
-	return (
-		node.nodeName === "BR" ||
-		(node.nodeType === Node.TEXT_NODE &&
-			(node.nodeValue?.includes("\n") ?? false))
-	);
+	return node.nodeName === "BR";
 }
 
 function trimLeadingBreaks(block: HTMLElement) {
-	while (block.firstChild && block.firstChild.nodeName === "BR") {
-		block.removeChild(block.firstChild);
+	while (block.firstChild) {
+		const first = block.firstChild;
+		if (first.nodeName === "BR") {
+			block.removeChild(first);
+			continue;
+		}
+		if (
+			first.nodeType === Node.TEXT_NODE &&
+			(first.nodeValue?.trim().length ?? 0) === 0
+		) {
+			block.removeChild(first);
+			continue;
+		}
+		break;
 	}
+}
+
+function hasVisibleContent(block: HTMLElement): boolean {
+	if (block.textContent && block.textContent.trim().length) {
+		return true;
+	}
+	return Boolean(block.querySelector("img, video, audio, iframe, embed"));
 }
