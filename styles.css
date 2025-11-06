@@ -1,0 +1,62 @@
+:root {
+	--neg-heading-comment-color: rgba(var(--mono-rgb-100, 120, 120, 120), 0.9);
+}
+
+.neg-heading.neg-h1 {
+	font-size: calc(var(--font-small, 1em) * 0.74);
+	line-height: 1.05;
+	font-weight: 400;
+	margin-block: 0.3em;
+	color: var(
+		--text-muted,
+		rgba(var(--mono-rgb-100, 120, 120, 120), 0.8)
+	);
+}
+
+.neg-heading-token {
+	color: var(
+		--text-faint,
+		rgba(var(--mono-rgb-100, 120, 120, 120), 0.65)
+	);
+	letter-spacing: 0.05em;
+	margin-inline-end: 0.28em;
+	text-transform: uppercase;
+	opacity: 0.55;
+	font-weight: 400;
+}
+
+.neg-heading.neg-h1 .neg-heading-token {
+	display: none;
+}
+
+.cm-scroller .cm-neg-heading-text {
+	color: var(
+		--text-muted,
+		rgba(var(--mono-rgb-100, 120, 120, 120), 0.72)
+	);
+	font-size: calc(var(--font-small, 1em) * 0.86);
+	line-height: 1.05;
+	font-weight: 380;
+}
+
+.cm-scroller .cm-neg-heading-token {
+	color: var(
+		--text-faint,
+		rgba(var(--mono-rgb-100, 120, 120, 120), 0.6)
+	);
+	opacity: 0.62;
+	font-weight: 380;
+	transition: opacity 0.12s ease;
+}
+
+.markdown-source-view.is-live-preview
+	.cm-line:not(.cm-active)
+	.cm-neg-heading-token:not(.cm-neg-heading-token-solo) {
+	display: none;
+}
+
+.cm-neg-heading-token-solo {
+	opacity: 0.6;
+	letter-spacing: 0.05em;
+	font-weight: 400;
+}
