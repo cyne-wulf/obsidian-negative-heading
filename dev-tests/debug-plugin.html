@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Negative Heading Plugin</title>
+</head>
+<body>
+    <h2>Test Cases</h2>
+
+    <div id="test1" class="test-case">
+        <h3>Test 1: Multiple headings in same block</h3>
+        <p id="block1">-# First
+-# Second</p>
+        <div class="result"></div>
+    </div>
+
+    <div id="test2" class="test-case">
+        <h3>Test 2: List item heading</h3>
+        <ul>
+            <li id="li1">-# List heading</li>
+        </ul>
+        <div class="result"></div>
+    </div>
+
+    <div id="test3" class="test-case">
+        <h3>Test 3: Nested container</h3>
+        <div id="container1">
+            <p id="nested1">-# Nested heading</p>
+        </div>
+        <div class="result"></div>
+    </div>
+
+    <div id="test4" class="test-case">
+        <h3>Test 4: Unicode characters</h3>
+        <p id="unicode1">-# Héllö Wörld 🔥</p>
+        <div class="result"></div>
+    </div>
+
+    <div id="test5" class="test-case">
+        <h3>Test 5: BR element</h3>
+        <p id="br1">-# First<br>-# Second</p>
+        <div class="result"></div>
+    </div>
+
+    <script>
+        // Simplified version of the plugin logic for debugging
+        const NEG_HEADING_TOKEN_REGEX = /^-#\s+/;
+
+        function findNextHeadingMatch(block) {
+            const walker = document.createTreeWalker(block, NodeFilter.SHOW_ALL);
+            let atLineStart = true;
+
+            while (walker.nextNode()) {
+                const node = walker.currentNode;
+
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    const element = node;
+                    if (element.dataset?.negHeading === "true" ||
+                        element.matches("code, pre, .math, .math-block")) {
+                        continue;
+                    }
+                    if (element.tagName === "BR") {
+                        atLineStart = true;
+                    }
+                    continue;
+                }
+
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const textNode = node;
+                    const value = textNode.nodeValue || "";
+                    let i = 0;
+
+                    while (i < value.length) {
+                        const char = value[i];
+                        if (char === "\n") {
+                            atLineStart = true;
+                            i++;
+                            continue;
+                        }
+                        if (atLineStart) {
+                            // Skip indented lines
+                            if (char === " " || char === "\t" || char === "\r") {
+                                atLineStart = false;
+                                i++;
+                                continue;
+                            }
+                            const slice = value.slice(i);
+                            const match = slice.match(NEG_HEADING_TOKEN_REGEX);
+                            if (match) {
+                                return {
+                                    node: textNode,
+                                    offset: i,
+                                    tokenLength: match[0].length
+                                };
+                            }
+                            atLineStart = false;
+                        }
+                        i++;
+                    }
+                    atLineStart = value.endsWith("\n");
+                }
+            }
+            return null;
+        }
+
+        function debugTransform(blockId) {
+            const block = document.getElementById(blockId);
+            const original = block.innerHTML;
+
+            let matches = [];
+            let match;
+            let count = 0;
+
+            // Find all matches
+            while ((match = findNextHeadingMatch(block)) && count < 10) {
+                matches.push({
+                    text: match.node.nodeValue,
+                    offset: match.offset,
+                    tokenLength: match.tokenLength
+                });
+
+                // Temporarily mark this as processed to find next
+                const span = document.createElement('span');
+                span.dataset.negHeading = 'true';
+                span.textContent = '[FOUND]';
+
+                const range = document.createRange();
+                range.setStart(match.node, match.offset);
+                range.setEnd(match.node, match.offset + match.tokenLength);
+                range.deleteContents();
+                range.insertNode(span);
+
+                count++;
+            }
+
+            // Restore original
+            block.innerHTML = original;
+
+            return matches;
+        }
+
+        // Run tests
+        function runTest(testId, blockId) {
+            const testDiv = document.getElementById(testId);
+            const resultDiv = testDiv.querySelector('.result');
+            const matches = debugTransform(blockId);
+
+            resultDiv.innerHTML = `
+                <strong>Matches found: ${matches.length}</strong><br>
+                ${matches.map((m, i) =>
+                    `Match ${i+1}: "${m.text}" at offset ${m.offset}`
+                ).join('<br>')}
+            `;
+        }
+
+        // Run all tests
+        runTest('test1', 'block1');
+        runTest('test2', 'li1');
+        runTest('test3', 'nested1');
+        runTest('test4', 'unicode1');
+        runTest('test5', 'br1');
+    </script>
+</body>
+</html>

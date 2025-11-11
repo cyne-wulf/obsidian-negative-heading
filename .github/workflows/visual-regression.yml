@@ -1,0 +1,80 @@
+name: Visual Regression Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  visual-regression-tests:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linting
+      run: npm run lint || true
+    
+    - name: Run edge case tests
+      run: npm run test:edge
+    
+    - name: Run visual regression tests
+      run: npm run test:visual
+    
+    - name: Run visual test runner
+      run: chmod +x dev-tests/run-visual-tests.sh && ./dev-tests/run-visual-tests.sh
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.node-version }}
+        path: |
+          coverage/
+          test-results/
+        retention-days: 30
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          let comment = '## 🧪 Visual Regression Test Results\n\n';
+          
+          try {
+            // Try to read test results
+            if (fs.existsSync('test-results.txt')) {
+              const results = fs.readFileSync('test-results.txt', 'utf8');
+              comment += '```\n' + results + '\n```\n';
+            } else {
+              comment += '✅ All visual regression tests passed!\n';
+            }
+          } catch (error) {
+            comment += '⚠️ Test execution completed with issues.\n';
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

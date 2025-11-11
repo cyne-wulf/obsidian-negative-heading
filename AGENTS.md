@@ -1,7 +1,56 @@
-# Obsidian community plugin
+# Negative Heading Plugin - Development Guide
 
-## Project overview
+## Project-Specific Overview
 
+**Plugin Name:** Negative Heading Plugin
+**Purpose:** Discord-style `-# Heading` syntax support in Obsidian
+**Author:** Ashan Devine
+**Architecture:** Dual-pipeline processing (Reader Mode DOM + Edit Mode CodeMirror decorations)
+
+### Key Features
+- Discord-style compact headings (`-# Heading text`)
+- Smart Toggle Command for converting lines to/from negative headings
+- Escape character support (`\-# Escaped text`)
+- Works in all view modes (Reading, Live Preview, Source)
+- List item support (`- -# List heading`)
+
+### Current Project Structure
+```
+src/
+  main.ts              # Plugin entry (584 lines) - Core rendering logic
+  types.ts             # TypeScript interfaces (40 lines)
+  commands/
+    toggle-command.ts  # Command orchestration (104 lines)
+    toggle-utils.ts    # Utility functions (169 lines)
+    toggle-analysis.ts # Majority detection (53 lines)
+tests/                 # 22 test files with Jest
+styles.css             # Negative heading styles
+manifest.json          # Plugin metadata
+```
+
+### Development Focus Areas
+
+**Architecture Notes:**
+- See ARCHITECTURE.md for detailed architecture documentation
+- Dual-pipeline: DOM post-processing (Reader) + CodeMirror decorations (Edit)
+- main.ts is larger than ideal (584 lines) - future refactoring should extract DOM utilities
+
+**Testing:**
+- Jest with jsdom for testing
+- 43 tests across 22 test files
+- Run: `npm test` or `npm run test:watch`
+- Visual regression tests: `npm run test:visual`
+- Edge case tests: `npm run test:edge`
+
+**Known Challenges:**
+- Reader Mode requires source access for escape detection via `getSectionInfo()`
+- List items need special inline styling
+- Code block/math block exclusion requires syntax tree traversal
+- Indented content must be filtered (line-start requirement)
+
+## General Obsidian Plugin Development
+
+### Target Platform
 - Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
 - Entry point: `main.ts` compiled to `main.js` and loaded by Obsidian.
 - Required release artifacts: `main.js`, `manifest.json`, and optional `styles.css`.
@@ -9,11 +58,10 @@
 ## Environment & tooling
 
 - Node.js: use current LTS (Node 18+ recommended).
-- **Package manager: npm** (required for this sample - `package.json` defines npm scripts and dependencies).
-- **Bundler: esbuild** (required for this sample - `esbuild.config.mjs` and build scripts depend on it). Alternative bundlers like Rollup or webpack are acceptable for other projects if they bundle all external dependencies into `main.js`.
-- Types: `obsidian` type definitions.
-
-**Note**: This sample project has specific technical dependencies on npm and esbuild. If you're creating a plugin from scratch, you can choose different tools, but you'll need to replace the build configuration accordingly.
+- **Package manager: npm** (required - `package.json` defines npm scripts and dependencies).
+- **Bundler: esbuild** (required - `esbuild.config.mjs` and build scripts depend on it).
+- **Test framework: Jest** with jsdom for DOM testing
+- Types: `obsidian` type definitions, `@codemirror` types.
 
 ### Install
 
@@ -43,26 +91,28 @@ npm run build
 ## File & folder conventions
 
 - **Organize code into multiple files**: Split functionality across separate modules rather than putting everything in `main.ts`.
-- Source lives in `src/`. Keep `main.ts` small and focused on plugin lifecycle (loading, unloading, registering commands).
-- **Example file structure**:
+- Source lives in `src/`. Keep `main.ts` focused on plugin lifecycle and core rendering logic.
+- **This project's structure**:
   ```
   src/
-    main.ts           # Plugin entry point, lifecycle management
-    settings.ts       # Settings interface and defaults
-    commands/         # Command implementations
-      command1.ts
-      command2.ts
-    ui/              # UI components, modals, views
-      modal.ts
-      view.ts
-    utils/           # Utility functions, helpers
-      helpers.ts
-      constants.ts
-    types.ts         # TypeScript interfaces and types
+    main.ts              # Plugin entry, Reader Mode pipeline, Edit Mode decorations
+    types.ts             # TypeScript interfaces (LineInfo, AnalysisResult, EditorState)
+    commands/            # Smart Toggle Command implementation
+      toggle-command.ts  # Command orchestration
+      toggle-utils.ts    # Line manipulation utilities
+      toggle-analysis.ts # Majority detection algorithm
+  tests/                 # Jest test suite
+    visual.test.ts       # Visual regression tests
+    edge-cases.test.ts   # 200+ edge case scenarios
+    [18 more test files]
+  styles.css             # Negative heading styling
+  manifest.json          # Plugin metadata
+  esbuild.config.mjs     # Build configuration
+  jest.config.js         # Jest configuration
   ```
 - **Do not commit build artifacts**: Never commit `node_modules/`, `main.js`, or other generated files to version control.
 - Keep the plugin small. Avoid large dependencies. Prefer browser-compatible packages.
-- Generated output should be placed at the plugin root or `dist/` depending on your build setup. Release artifacts must end up at the top level of the plugin folder in the vault (`main.js`, `manifest.json`, `styles.css`).
+- Generated output should be placed at the plugin root. Release artifacts must end up at the top level of the plugin folder (`main.js`, `manifest.json`, `styles.css`).
 
 ## Manifest rules (`manifest.json`)
 
@@ -80,11 +130,38 @@ npm run build
 
 ## Testing
 
-- Manual install for testing: copy `main.js`, `manifest.json`, `styles.css` (if any) to:
+### Automated Testing (Jest)
+
+This project uses Jest with jsdom for comprehensive automated testing:
+
+```bash
+npm test                    # Run all tests
+npm run test:watch          # Watch mode
+npm run test:visual         # Visual regression tests
+npm run test:edge          # Edge case tests
+npm run test:update-snapshots  # Update snapshots
+```
+
+**Test Categories:**
+- Visual regression tests (visual.test.ts)
+- Edge cases (200+ scenarios in edge-cases.test.ts)
+- Mode parity tests (source-mode.test.ts, mode-parity.test.ts)
+- Escape character tests (escape-character.test.ts, reader-mode-escape-*.test.ts)
+- Toggle command tests (toggle-command-*.test.ts)
+- List item behavior tests
+- Native behavior probes
+
+**Current Status:** 43 tests, target 100% pass rate
+
+### Manual Testing
+
+- Manual install for testing: copy `main.js`, `manifest.json`, `styles.css` to:
   ```
-  <Vault>/.obsidian/plugins/<plugin-id>/
+  <Vault>/.obsidian/plugins/negative-heading-plugin/
   ```
 - Reload Obsidian and enable the plugin in **Settings → Community plugins**.
+- Test in all three view modes: Reading View, Live Preview, Source Mode
+- Test list item behavior, escape characters, and edge cases
 
 ## Commands & settings
 
