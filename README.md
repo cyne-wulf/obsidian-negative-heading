@@ -2,11 +2,6 @@
 
 An Obsidian plugin that renders Discord-style `-# Heading` lines as compact, muted headings in all view modes (Reading View, Live Preview, and Source Mode). The rendered block keeps normal Markdown content (bold, italics, links) while the `-# ` marker is dimmed, creating lightweight subheadings perfect for organizing content without the visual weight of traditional headings.
 
-**Author:** Ashan Devine
-**Repository:** [github.com/cyne-wulf/negative-heading-plugin](https://github.com/cyne-wulf/negative-heading-plugin)
-**Current Version:** 0.1.0
-**License:** GPL-3.0
-
 ## Features
 ![Main Demo](https://private-user-images.githubusercontent.com/54266829/511137875-3407d475-066a-44aa-9df6-5261ae8610be.gif?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjI4OTg3NDYsIm5iZiI6MTc2Mjg5ODQ0NiwicGF0aCI6Ii81NDI2NjgyOS81MTExMzc4NzUtMzQwN2Q0NzUtMDY2YS00NGFhLTlkZjYtNTI2MWFlODYxMGJlLmdpZj9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTExMTElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUxMTExVDIyMDA0NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTgyYzVmMDRlMjAzNGFmMGJhNWVkMmVlZGNhZjQ2ZDVlNmNjNTcwMmQxMGZiMDA0NTIxYzhjYjI1MjY0Y2VjYzkmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.nbzw-xYXvD_-UwKIW4u177A9PBEHeHNapfW-owWlE68)
 - **All View Modes**: Works seamlessly in Reading View, Live Preview, and Source Mode
