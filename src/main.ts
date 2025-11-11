@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, MarkdownPostProcessorContext } from "obsidian";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import { RangeSetBuilder } from "@codemirror/state";
@@ -11,9 +11,11 @@ import {
 } from "@codemirror/view";
 
 const NEG_HEADING_TOKEN_REGEX = /^-#\s+/;
+const ESCAPED_NEG_HEADING_REGEX = /^\\-#\s+/; // Detect escaped syntax \-#
 const TRAILING_SPACE_REGEX = /\s+$/;
 const BLOCK_SELECTOR = "p, li";
-const DISALLOWED_CONTAINER_SELECTOR = "pre, code, .math-block, .math, .callout";
+// NOTE: .callout removed - native headings work in callouts, so should negative headings
+const DISALLOWED_CONTAINER_SELECTOR = "pre, code, .math-block, .math";
 
 const headingTextDecoration = Decoration.mark({
 	class: "cm-neg-heading-text",
@@ -46,14 +48,14 @@ const negativeHeadingViewPlugin = ViewPlugin.fromClass(
 
 export default class NegativeHeadingPlugin extends Plugin {
 	async onload() {
-		this.registerMarkdownPostProcessor((element) => {
-			this.transformMarkdown(element);
+		this.registerMarkdownPostProcessor((element, ctx) => {
+			this.transformMarkdown(element, ctx);
 		});
 		this.registerEditorExtension(negativeHeadingViewPlugin);
 		this.applyCommentColorFallback();
 	}
 
-	private transformMarkdown(root: HTMLElement) {
+	transformMarkdown(root: HTMLElement, ctx?: MarkdownPostProcessorContext) {
 		const targets: HTMLElement[] = [];
 		if (matchesBlockSelector(root)) {
 			targets.push(root);
@@ -61,12 +63,21 @@ export default class NegativeHeadingPlugin extends Plugin {
 		root
 			.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)
 			.forEach((block) => targets.push(block));
-		targets.forEach((block) => this.tryPromoteBlock(block));
+		targets.forEach((block) => this.tryPromoteBlock(block, ctx));
 	}
 
-	private tryPromoteBlock(block: HTMLElement) {
+	private tryPromoteBlock(block: HTMLElement, ctx?: MarkdownPostProcessorContext) {
 		if (!this.isEligibleBlock(block)) {
 			return;
+		}
+
+		// Check original markdown source for escaped negative headings
+		if (ctx) {
+			const sectionInfo = ctx.getSectionInfo(block);
+			if (sectionInfo && this.isBlockEscapedInSource(sectionInfo, block)) {
+				// This block contains escaped negative heading(s) - skip processing
+				return;
+			}
 		}
 
 		const doc = block.ownerDocument ?? document;
@@ -96,19 +107,61 @@ export default class NegativeHeadingPlugin extends Plugin {
 
 			const headingEl = this.createHeadingElement(doc, fragment);
 			range.insertNode(headingEl);
+
+			// Apply inline styles for list items (fallback for CSS loading issues)
+			if (headingEl.closest('li')) {
+				headingEl.style.display = 'inline-block';
+				headingEl.style.marginBlock = '0';
+				headingEl.style.marginInlineStart = '0';
+				headingEl.style.verticalAlign = 'baseline';
+			}
+
 			removeDelimiterAfterHeading(lineEnd);
 			match = findNextHeadingMatch(block);
 		}
 	}
 
+	private isBlockEscapedInSource(sectionInfo: any, block: HTMLElement): boolean {
+		// Extract original source text and line boundaries
+		const { text, lineStart, lineEnd } = sectionInfo;
+		const lines = text.split('\n');
+
+		// Get the text content of the block to match it with source lines
+		const blockText = block.textContent?.trim() || '';
+
+		// Check each line in the section for escaped negative heading syntax
+		for (let i = lineStart; i <= lineEnd && i < lines.length; i++) {
+			const line = lines[i];
+			const trimmedLine = line.trim();
+
+			// Check if this line starts with escaped negative heading
+			if (ESCAPED_NEG_HEADING_REGEX.test(trimmedLine)) {
+				// Verify this line corresponds to our block by checking content
+				// Remove the escape and token to see if it matches block content
+				const contentAfterToken = trimmedLine.replace(ESCAPED_NEG_HEADING_REGEX, '').trim();
+				if (blockText.includes(contentAfterToken) || contentAfterToken.includes(blockText)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	private isEligibleBlock(block: HTMLElement): boolean {
-		if (!(block instanceof HTMLElement)) {
+		// More robust check that doesn't rely on instanceof
+		if (!block || block.nodeType !== 1) {
 			return false;
 		}
-		if (block.dataset.negHeading === "true") {
+		if (block.dataset?.negHeading === "true") {
 			return false;
 		}
-		if (block.closest(DISALLOWED_CONTAINER_SELECTOR)) {
+		// Check if block is within a disallowed container
+		if (block.closest && block.closest(DISALLOWED_CONTAINER_SELECTOR)) {
+			return false;
+		}
+		// Also check if the block itself matches disallowed selectors
+		if (block.matches && block.matches(DISALLOWED_CONTAINER_SELECTOR)) {
 			return false;
 		}
 		return Boolean(block.textContent && block.textContent.length);
@@ -170,31 +223,82 @@ function buildDecorations(view: EditorView): DecorationSet {
 		let pos = from;
 		while (pos <= to) {
 			const line = view.state.doc.lineAt(pos);
-				const tokenMatch = NEG_HEADING_TOKEN_REGEX.exec(line.text);
-				if (tokenMatch) {
-					const tokenFrom = line.from;
-					const tokenTo = tokenFrom + tokenMatch[0].length;
-					const remainder = line.text.slice(tokenMatch[0].length);
-					const hasContent = remainder.trim().length > 0;
-					const trailingSpaces = hasContent
-						? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
-						: remainder.length;
-					const textTo = line.to - trailingSpaces;
-					const tokenDecoration = hasContent
-						? headingTokenDecoration
-						: headingTokenSoloDecoration;
-					if (
-						tokenTo > tokenFrom &&
-						!isInExcludedNode(tree, Math.min(line.to, tokenFrom + 1))
-					) {
-						builder.add(tokenFrom, tokenTo, tokenDecoration);
+				// Skip if entire line is within a code/math block
+				if (isInExcludedNode(tree, line.from) || isInExcludedNode(tree, line.to)) {
+					pos = line.to + 1;
+					continue;
+				}
+
+				// Check if line is a list item (e.g., "- ", "* ", "+ ", "1. ", "2. ")
+				const listMatch = line.text.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+
+				if (listMatch) {
+					// This is a list item - check content after marker
+					const [, indent, marker, content] = listMatch;
+					const markerOffset = indent.length + marker.length + 1; // +1 for space after marker
+
+					// Skip escaped syntax in list items
+					if (ESCAPED_NEG_HEADING_REGEX.test(content)) {
+						pos = line.to + 1;
+						continue;
 					}
-					if (hasContent) {
-						if (
-							textTo > tokenTo &&
-							!isInExcludedNode(tree, Math.max(tokenTo, textTo - 1))
-						) {
-							builder.add(tokenTo, textTo, headingTextDecoration);
+
+					// Check if content starts with -#
+					const tokenMatch = content.match(/^-#\s+/);
+					if (tokenMatch) {
+						const tokenFrom = line.from + markerOffset;
+						const tokenTo = tokenFrom + tokenMatch[0].length;
+						const remainder = content.slice(tokenMatch[0].length);
+						const hasContent = remainder.trim().length > 0;
+						const trailingSpaces = hasContent
+							? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
+							: remainder.length;
+						const textTo = line.to - trailingSpaces;
+						const tokenDecoration = hasContent
+							? headingTokenDecoration
+							: headingTokenSoloDecoration;
+						if (tokenTo > tokenFrom) {
+							builder.add(tokenFrom, tokenTo, tokenDecoration);
+						}
+						if (hasContent) {
+							if (textTo > tokenTo) {
+								builder.add(tokenTo, textTo, headingTextDecoration);
+							}
+						}
+					}
+				} else {
+					// Not a list item - use regular processing
+					// Skip indented lines - they should not be decorated as headings
+					if (/^[\s\t]/.test(line.text)) {
+						pos = line.to + 1;
+						continue;
+					}
+					// Skip escaped syntax \-# (matches native \# behavior)
+					if (ESCAPED_NEG_HEADING_REGEX.test(line.text)) {
+						pos = line.to + 1;
+						continue;
+					}
+					// Only match if token is at the very start of the line
+					const tokenMatch = line.text.match(/^-#\s+/);
+					if (tokenMatch) {
+						const tokenFrom = line.from;
+						const tokenTo = tokenFrom + tokenMatch[0].length;
+						const remainder = line.text.slice(tokenMatch[0].length);
+						const hasContent = remainder.trim().length > 0;
+						const trailingSpaces = hasContent
+							? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
+							: remainder.length;
+						const textTo = line.to - trailingSpaces;
+						const tokenDecoration = hasContent
+							? headingTokenDecoration
+							: headingTokenSoloDecoration;
+						if (tokenTo > tokenFrom) {
+							builder.add(tokenFrom, tokenTo, tokenDecoration);
+						}
+						if (hasContent) {
+							if (textTo > tokenTo) {
+								builder.add(tokenTo, textTo, headingTextDecoration);
+							}
 						}
 					}
 				}
@@ -229,8 +333,10 @@ function isInExcludedNode(tree: ReturnType<typeof syntaxTree>, pos: number): boo
 }
 
 function matchesBlockSelector(element: HTMLElement): boolean {
+	// More robust check that doesn't rely on instanceof
 	return Boolean(
-		element instanceof HTMLElement &&
+		element &&
+			element.nodeType === 1 && // Element node
 			typeof element.matches === "function" &&
 			element.matches(BLOCK_SELECTOR),
 	);
@@ -273,7 +379,8 @@ function findNextHeadingMatch(block: HTMLElement): HeadingMatch | null {
 				"code, pre, .math, .math-block, [data-neg-heading='true']",
 			)
 		) {
-			atLineStart = textNode.nodeValue?.endsWith("\n") ?? false;
+			// Skip this text node without modifying atLineStart state
+			// The state should be preserved for the next eligible text node
 			continue;
 		}
 
@@ -287,11 +394,30 @@ function findNextHeadingMatch(block: HTMLElement): HeadingMatch | null {
 				continue;
 			}
 			if (atLineStart) {
+				// Check for heading token ONLY at the absolute start of a line
+				// Skip the line if it starts with whitespace (indented)
 				if (char === " " || char === "\t" || char === "\r") {
-					i++;
+					// Indented content - skip to next line or end
+					atLineStart = false;
+					// Skip the entire indented line
+					while (i < value.length && value[i] !== "\n") {
+						i++;
+					}
+					// Don't increment again - the newline will be handled in the next iteration
 					continue;
 				}
 				const slice = value.slice(i);
+
+				// Check for escaped syntax \-# first (matches native heading behavior)
+				const escapedMatch = slice.match(ESCAPED_NEG_HEADING_REGEX);
+				if (escapedMatch) {
+					// This is escaped, skip it (like native \# doesn't render)
+					atLineStart = false;
+					i++;
+					continue;
+				}
+
+				// Now check for normal heading token
 				const match = slice.match(NEG_HEADING_TOKEN_REGEX);
 				if (match) {
 					return {
@@ -333,6 +459,24 @@ function findLineEnd(
 		if (!next) {
 			break;
 		}
+
+		// Stop before block-level elements to prevent descending into nested lists
+		if (next.nodeType === Node.ELEMENT_NODE) {
+			const element = next as Element;
+			const blockTags = ['UL', 'OL', 'BLOCKQUOTE', 'PRE', 'TABLE', 'HR'];
+			if (blockTags.includes(element.tagName)) {
+				// Found a block element - end the line here
+				if (current.nodeType === Node.TEXT_NODE) {
+					return {
+						type: "end",
+						node: current as Text,
+						offset: ((current as Text).nodeValue ?? "").length,
+					};
+				}
+				return { type: "end", node: current, offset: 0 };
+			}
+		}
+
 		if (next.nodeName === "BR") {
 			return { type: "break", node: next };
 		}
@@ -422,7 +566,8 @@ function fragmentHasVisibleContent(fragment: DocumentFragment): boolean {
 function removeDelimiterAfterHeading(info: LineEndInfo) {
 	if (info.type === "newline") {
 		const text = info.node.nodeValue ?? "";
-		info.node.nodeValue = text.slice(info.offset + 1);
+		// Keep text before the newline, skip the newline character
+		info.node.nodeValue = text.slice(0, info.offset) + text.slice(info.offset + 1);
 	} else if (info.type === "break") {
 		info.node.parentNode?.removeChild(info.node);
 	}

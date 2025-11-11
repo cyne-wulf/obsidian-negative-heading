@@ -13,6 +13,19 @@
 	);
 }
 
+/* Make negative headings inline when inside list items (matches native heading behavior) */
+/* Multiple selectors for maximum compatibility across different Obsidian contexts */
+.markdown-preview-view li .neg-heading.neg-h1,
+.markdown-rendered li .neg-heading.neg-h1,
+.markdown-reading-view li .neg-heading.neg-h1,
+li p .neg-heading.neg-h1,
+li .neg-heading.neg-h1 {
+	display: inline-block !important;
+	margin-block: 0;
+	margin-inline-start: 0;
+	vertical-align: baseline;
+}
+
 .neg-heading-token {
 	color: var(
 		--text-faint,
