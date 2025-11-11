@@ -1,7 +1,7 @@
 {
 	"id": "negative-heading-plugin",
 	"name": "Negative Heading",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"minAppVersion": "1.6.0",
 	"description": "Render Discord-style \"-#\" lines as compact headings in reading view and the editor.",
 	"author": "Ashan Devine",
