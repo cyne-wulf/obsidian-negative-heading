@@ -15,7 +15,7 @@ An Obsidian plugin that renders Discord-style `-# Heading` lines as compact, mut
 - **Smart Toggle Command**: Intelligently add or remove negative heading tokens based on majority detection
 - **List Item Support**: Works inside list items (`- -# List heading`)
 - **Escape Character Support**: Use `\-# ` to prevent transformation (renders as literal `-# ` text)
-- **Context-Aware**: Skips fenced code blocks, math blocks, inline code, and callouts for proper Markdown rendering
+- **Context-Aware**: Skips fenced code blocks, math blocks, and inline code for proper Markdown rendering
 - **Theme Integration**: Uses `var(--text-muted)` / `var(--text-faint)` with intelligent fallbacks to theme comment color or neutral gray
 
 ## Usage
@@ -48,7 +48,7 @@ The plugin provides a **Smart toggle negative heading** command that intelligent
 Notes:
 
 - Only a single leading `-# ` token is supported per block.
-- Syntax inside code fences, math blocks, and callouts is ignored on purpose.
+- Syntax inside code fences and math blocks is ignored on purpose.
 - The smart toggle command skips empty lines and whitespace-only lines in multi-line selections.
 
 ## Installation
@@ -85,9 +85,6 @@ Reload Obsidian after each build, or use the **Reload app without saving** hotke
 - Only matches lines that begin with `-# ` (at line start); indented lines are treated as plain text.
 - The plugin targets Obsidian v1.6+ where Live Preview and the current CodeMirror 6 API are available.
 - Single `-# ` token per line (repeated markers are treated as plain text).
-
-### Known Issues
-
 - **Nested Lists in Reader Mode**: There is a known issue with rendering negative headings inside nested list items in Reader Mode. The styling may not apply correctly in deeply nested list structures. This is being investigated for a future update.
 
 ## Testing
@@ -114,7 +111,7 @@ npm run test:edge          # Edge case tests
 
 ### Plugin doesn't appear in Reading View
 - Ensure you're using `-# ` at the start of a line (not indented)
-- Check that the line isn't inside a code block, math block, or callout
+- Check that the line isn't inside a code block or math block
 - Try reloading Obsidian
 
 ### Styles look wrong
