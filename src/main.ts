@@ -81,12 +81,25 @@ export default class NegativeHeadingPlugin extends Plugin {
 			return;
 		}
 
-		// Check original markdown source for escaped negative headings
+		// Build a set of escaped line contents for this block
+		const escapedLineContents = new Set<string>();
 		if (ctx) {
 			const sectionInfo = ctx.getSectionInfo(block);
-			if (sectionInfo && this.isBlockEscapedInSource(sectionInfo, block)) {
-				// This block contains escaped negative heading(s) - skip processing
-				return;
+			if (sectionInfo) {
+				const { text, lineStart, lineEnd } = sectionInfo;
+				const lines = text.split('\n');
+
+				// Find all escaped lines in this block's range
+				for (let i = lineStart; i <= lineEnd && i < lines.length; i++) {
+					const line = lines[i];
+					const trimmedLine = line.trim();
+
+					if (ESCAPED_NEG_HEADING_REGEX.test(trimmedLine)) {
+						// This line is escaped, extract its content
+						const content = trimmedLine.replace(ESCAPED_NEG_HEADING_REGEX, '').trim();
+						escapedLineContents.add(content);
+					}
+				}
 			}
 		}
 
@@ -104,6 +117,19 @@ export default class NegativeHeadingPlugin extends Plugin {
 				range.setEndAfter(lineEnd.node);
 			} else {
 				range.setEnd(lineEnd.node, lineEnd.offset);
+			}
+
+			// Clone the content to check if it's escaped
+			const contentToCheck = range.cloneContents();
+			const contentText = contentToCheck.textContent?.trim() || '';
+
+			// Check if this specific line content is in our escaped set
+			if (escapedLineContents.has(contentText)) {
+				// This line is escaped - we need to remove the token to prevent
+				// infinite loop, but we don't transform it into a heading
+				removeTokenFromMatch(match);
+				match = findNextHeadingMatch(block);
+				continue;
 			}
 
 			const fragment = range.extractContents();
@@ -131,32 +157,6 @@ export default class NegativeHeadingPlugin extends Plugin {
 		}
 	}
 
-	private isBlockEscapedInSource(sectionInfo: any, block: HTMLElement): boolean {
-		// Extract original source text and line boundaries
-		const { text, lineStart, lineEnd } = sectionInfo;
-		const lines = text.split('\n');
-
-		// Get the text content of the block to match it with source lines
-		const blockText = block.textContent?.trim() || '';
-
-		// Check each line in the section for escaped negative heading syntax
-		for (let i = lineStart; i <= lineEnd && i < lines.length; i++) {
-			const line = lines[i];
-			const trimmedLine = line.trim();
-
-			// Check if this line starts with escaped negative heading
-			if (ESCAPED_NEG_HEADING_REGEX.test(trimmedLine)) {
-				// Verify this line corresponds to our block by checking content
-				// Remove the escape and token to see if it matches block content
-				const contentAfterToken = trimmedLine.replace(ESCAPED_NEG_HEADING_REGEX, '').trim();
-				if (blockText.includes(contentAfterToken) || contentAfterToken.includes(blockText)) {
-					return true;
-				}
-			}
-		}
-
-		return false;
-	}
 
 	private isEligibleBlock(block: HTMLElement): boolean {
 		// More robust check that doesn't rely on instanceof
