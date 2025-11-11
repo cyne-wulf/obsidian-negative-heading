@@ -17,10 +17,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
-    
+      uses: actions/checkout@v4
+
     - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
@@ -30,18 +30,12 @@ jobs:
     
     - name: Run linting
       run: npm run lint || true
-    
-    - name: Run edge case tests
-      run: npm run test:edge
-    
-    - name: Run visual regression tests
-      run: npm run test:visual
-    
-    - name: Run visual test runner
-      run: chmod +x dev-tests/run-visual-tests.sh && ./dev-tests/run-visual-tests.sh
-    
+
+    - name: Run all tests
+      run: npm test
+
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ matrix.node-version }}
@@ -51,30 +45,13 @@ jobs:
         retention-days: 30
     
     - name: Comment PR with results
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
+      if: github.event_name == 'pull_request' && success()
+      uses: actions/github-script@v7
       with:
         script: |
-          const fs = require('fs');
-          const path = require('path');
-          
-          let comment = '## 🧪 Visual Regression Test Results\n\n';
-          
-          try {
-            // Try to read test results
-            if (fs.existsSync('test-results.txt')) {
-              const results = fs.readFileSync('test-results.txt', 'utf8');
-              comment += '```\n' + results + '\n```\n';
-            } else {
-              comment += '✅ All visual regression tests passed!\n';
-            }
-          } catch (error) {
-            comment += '⚠️ Test execution completed with issues.\n';
-          }
-          
           github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: comment
+            body: '## ✅ Test Suite Passed\n\nAll tests completed successfully on Node.js ${{ matrix.node-version }}!'
           });
