@@ -41,8 +41,8 @@ describe('Edge Cases - Negative Heading Plugin', () => {
 
       plugin.transformMarkdown(block);
 
-      // Should remove the token but leave whitespace
-      expect(block.innerHTML).toContain('   ');
+      // Token with only whitespace should be completely removed (no heading created)
+      expect(block.innerHTML).toBe('');
     });
 
     test('should handle multiple heading tokens on same line', () => {

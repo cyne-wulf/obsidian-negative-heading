@@ -1,17 +1,17 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`Visual Regression Tests - Negative Heading Plugin Core Functionality basic-heading: Basic negative heading transformation: visual-basic-heading 1`] = `"<div class="cm-s-obsidian">-# Simple heading</div>"`;
+exports[`Visual Regression Tests - Negative Heading Plugin Core Functionality basic-heading: Basic negative heading transformation: visual-basic-heading 1`] = `"<div class="cm-s-obsidian"><div class="neg-heading neg-h1" data-neg-heading="true" role="heading" aria-level="7">Simple heading</div></div>"`;
 
 exports[`Visual Regression Tests - Negative Heading Plugin Core Functionality heading-in-paragraph: Heading embedded within paragraph content: visual-heading-in-paragraph 1`] = `
-"<div class="cm-s-obsidian">Some text before
--# Heading text
+"<div class="cm-s-obsidian"><div class="neg-heading neg-h1" data-neg-heading="true" role="heading" aria-level="7">Heading text</div>Some text before
+
 Some text after</div>"
 `;
 
-exports[`Visual Regression Tests - Negative Heading Plugin Core Functionality heading-with-content: Heading with substantial text content: visual-heading-with-content 1`] = `"<div class="cm-s-obsidian">-# This is a longer heading with more content</div>"`;
+exports[`Visual Regression Tests - Negative Heading Plugin Core Functionality heading-with-content: Heading with substantial text content: visual-heading-with-content 1`] = `"<div class="cm-s-obsidian"><div class="neg-heading neg-h1" data-neg-heading="true" role="heading" aria-level="7">This is a longer heading with more content</div></div>"`;
 
 exports[`Visual Regression Tests - Negative Heading Plugin Core Functionality multiple-headings: Multiple headings in same block: visual-multiple-headings 1`] = `
-"<div class="cm-s-obsidian">-# First heading
+"<div class="cm-s-obsidian"><div class="neg-heading neg-h1" data-neg-heading="true" role="heading" aria-level="7">First heading</div><div class="neg-heading neg-h1" data-neg-heading="true" role="heading" aria-level="7">Second heading</div>
 Some content
--# Second heading</div>"
+</div>"
 `;

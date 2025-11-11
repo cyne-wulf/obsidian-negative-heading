@@ -13,11 +13,37 @@ beforeAll(() => {
 
 // Mock for Source Mode behavior (regex-based)
 function testSourceModeBehavior(input: string): boolean {
-  const NEG_HEADING_TOKEN_REGEX = /^-#\s+/;
+  const NEG_HEADING_TOKEN_REGEX = /^-#\s+(.+)$/; // Must have actual content after space
   const lines = input.split('\n');
+  let inCodeFence = false;
+  let inMathBlock = false;
+
   for (const line of lines) {
+    // Check for code fence boundaries
+    if (line.startsWith('```')) {
+      inCodeFence = !inCodeFence;
+      continue;
+    }
+
+    // Check for math block boundaries
+    if (line.startsWith('$$')) {
+      inMathBlock = !inMathBlock;
+      continue;
+    }
+
+    // Skip lines inside code fences or math blocks
+    if (inCodeFence || inMathBlock) {
+      continue;
+    }
+
+    // Check if line matches heading pattern with actual content
+    // Don't trim - indented lines should not match
     if (NEG_HEADING_TOKEN_REGEX.test(line)) {
-      return true; // Found a heading that would be decorated
+      // Additional check: ensure content isn't just whitespace
+      const match = line.match(NEG_HEADING_TOKEN_REGEX);
+      if (match && match[1] && match[1].trim()) {
+        return true; // Found a valid heading with content
+      }
     }
   }
   return false;
@@ -27,8 +53,34 @@ function testSourceModeBehavior(input: string): boolean {
 function testReaderModeBehavior(input: string): boolean {
   const MockPlugin = createWorkingMockPlugin();
   const plugin = new MockPlugin();
-  const block = document.createElement('p');
-  block.textContent = input;
+
+  // Pre-process the input to simulate Obsidian's markdown processing
+  let processedInput = input;
+  let block: HTMLElement;
+
+  // Check if the entire input is a code fence
+  if (input.startsWith('```') && input.endsWith('```')) {
+    // Create a pre element for code fence
+    block = document.createElement('pre');
+    const code = document.createElement('code');
+    // Extract content between the fence markers
+    const content = input.slice(3, -3).trim();
+    code.textContent = content;
+    block.appendChild(code);
+  }
+  // Check if the entire input is a math block
+  else if (input.startsWith('$$') && input.endsWith('$$')) {
+    // Create a div with math-block class for math
+    block = document.createElement('div');
+    block.className = 'math-block';
+    const content = input.slice(2, -2).trim();
+    block.textContent = content;
+  }
+  else {
+    // Regular paragraph
+    block = document.createElement('p');
+    block.textContent = input;
+  }
 
   plugin.transformMarkdown(block);
 
