@@ -1,4 +1,4 @@
-import { Plugin, MarkdownPostProcessorContext } from "obsidian";
+import { Plugin, MarkdownPostProcessorContext, Editor } from "obsidian";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode } from "@lezer/common";
 import { RangeSetBuilder } from "@codemirror/state";
@@ -9,6 +9,7 @@ import {
 	ViewPlugin,
 	ViewUpdate,
 } from "@codemirror/view";
+import { smartToggleNegativeHeading } from "./commands/toggle-command";
 
 const NEG_HEADING_TOKEN_REGEX = /^-#\s+/;
 const ESCAPED_NEG_HEADING_REGEX = /^\\-#\s+/; // Detect escaped syntax \-#
@@ -53,6 +54,15 @@ export default class NegativeHeadingPlugin extends Plugin {
 		});
 		this.registerEditorExtension(negativeHeadingViewPlugin);
 		this.applyCommentColorFallback();
+		
+		// Register smart toggle command
+		this.addCommand({
+			id: "smart-toggle-negative-heading",
+			name: "Smart Toggle Negative Heading",
+			editorCallback: (editor: Editor) => {
+				smartToggleNegativeHeading(editor);
+			},
+		});
 	}
 
 	transformMarkdown(root: HTMLElement, ctx?: MarkdownPostProcessorContext) {
@@ -223,85 +233,100 @@ function buildDecorations(view: EditorView): DecorationSet {
 		let pos = from;
 		while (pos <= to) {
 			const line = view.state.doc.lineAt(pos);
-				// Skip if entire line is within a code/math block
-				if (isInExcludedNode(tree, line.from) || isInExcludedNode(tree, line.to)) {
+			
+			// FIX 3: Enhanced code block detection
+			// Check if ANY part of the line is within a code/math block
+			// This prevents rendering inside code blocks more reliably
+			let isLineInCodeBlock = false;
+			for (let checkPos = line.from; checkPos <= line.to; checkPos++) {
+				if (isInExcludedNode(tree, checkPos)) {
+					isLineInCodeBlock = true;
+					break;
+				}
+			}
+			if (isLineInCodeBlock) {
+				pos = line.to + 1;
+				continue;
+			}
+
+			// Check if line is a list item (e.g., "- ", "* ", "+ ", "1. ", "2. ")
+			const listMatch = line.text.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+
+			if (listMatch) {
+				// This is a list item - check content after marker
+				const [, indent, marker, content] = listMatch;
+				const markerOffset = indent.length + marker.length + 1; // +1 for space after marker
+
+				// Skip escaped syntax in list items
+				if (ESCAPED_NEG_HEADING_REGEX.test(content)) {
+					// FIX 1: Don't skip to next line, just skip processing this one
 					pos = line.to + 1;
 					continue;
 				}
 
-				// Check if line is a list item (e.g., "- ", "* ", "+ ", "1. ", "2. ")
-				const listMatch = line.text.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
-
-				if (listMatch) {
-					// This is a list item - check content after marker
-					const [, indent, marker, content] = listMatch;
-					const markerOffset = indent.length + marker.length + 1; // +1 for space after marker
-
-					// Skip escaped syntax in list items
-					if (ESCAPED_NEG_HEADING_REGEX.test(content)) {
-						pos = line.to + 1;
-						continue;
+				// Check if content starts with -#
+				const tokenMatch = content.match(/^-#\s+/);
+				if (tokenMatch) {
+					// FIX 2: Check if we're in a callout/admonition
+					// Callouts should be allowed (not excluded)
+					const tokenFrom = line.from + markerOffset;
+					const tokenTo = tokenFrom + tokenMatch[0].length;
+					const remainder = content.slice(tokenMatch[0].length);
+					const hasContent = remainder.trim().length > 0;
+					const trailingSpaces = hasContent
+						? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
+						: remainder.length;
+					const textTo = line.to - trailingSpaces;
+					const tokenDecoration = hasContent
+						? headingTokenDecoration
+						: headingTokenSoloDecoration;
+					if (tokenTo > tokenFrom) {
+						builder.add(tokenFrom, tokenTo, tokenDecoration);
 					}
-
-					// Check if content starts with -#
-					const tokenMatch = content.match(/^-#\s+/);
-					if (tokenMatch) {
-						const tokenFrom = line.from + markerOffset;
-						const tokenTo = tokenFrom + tokenMatch[0].length;
-						const remainder = content.slice(tokenMatch[0].length);
-						const hasContent = remainder.trim().length > 0;
-						const trailingSpaces = hasContent
-							? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
-							: remainder.length;
-						const textTo = line.to - trailingSpaces;
-						const tokenDecoration = hasContent
-							? headingTokenDecoration
-							: headingTokenSoloDecoration;
-						if (tokenTo > tokenFrom) {
-							builder.add(tokenFrom, tokenTo, tokenDecoration);
-						}
-						if (hasContent) {
-							if (textTo > tokenTo) {
-								builder.add(tokenTo, textTo, headingTextDecoration);
-							}
-						}
-					}
-				} else {
-					// Not a list item - use regular processing
-					// Skip indented lines - they should not be decorated as headings
-					if (/^[\s\t]/.test(line.text)) {
-						pos = line.to + 1;
-						continue;
-					}
-					// Skip escaped syntax \-# (matches native \# behavior)
-					if (ESCAPED_NEG_HEADING_REGEX.test(line.text)) {
-						pos = line.to + 1;
-						continue;
-					}
-					// Only match if token is at the very start of the line
-					const tokenMatch = line.text.match(/^-#\s+/);
-					if (tokenMatch) {
-						const tokenFrom = line.from;
-						const tokenTo = tokenFrom + tokenMatch[0].length;
-						const remainder = line.text.slice(tokenMatch[0].length);
-						const hasContent = remainder.trim().length > 0;
-						const trailingSpaces = hasContent
-							? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
-							: remainder.length;
-						const textTo = line.to - trailingSpaces;
-						const tokenDecoration = hasContent
-							? headingTokenDecoration
-							: headingTokenSoloDecoration;
-						if (tokenTo > tokenFrom) {
-							builder.add(tokenFrom, tokenTo, tokenDecoration);
-						}
-						if (hasContent) {
-							if (textTo > tokenTo) {
-								builder.add(tokenTo, textTo, headingTextDecoration);
-							}
+					if (hasContent) {
+						if (textTo > tokenTo) {
+							builder.add(tokenTo, textTo, headingTextDecoration);
 						}
 					}
 				}
+			} else {
+				// Not a list item - use regular processing
+				// Skip indented lines - they should not be decorated as headings
+				if (/^[\s\t]/.test(line.text)) {
+					pos = line.to + 1;
+					continue;
+				}
+				// Skip escaped syntax \-# (matches native \# behavior)
+				if (ESCAPED_NEG_HEADING_REGEX.test(line.text)) {
+					// FIX 1: Ensure we properly move to the next line
+					pos = line.to + 1;
+					continue;
+				}
+				// Only match if token is at the very start of the line
+				const tokenMatch = line.text.match(/^-#\s+/);
+				if (tokenMatch) {
+					const tokenFrom = line.from;
+					const tokenTo = tokenFrom + tokenMatch[0].length;
+					const remainder = line.text.slice(tokenMatch[0].length);
+					const hasContent = remainder.trim().length > 0;
+					const trailingSpaces = hasContent
+						? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
+						: remainder.length;
+					const textTo = line.to - trailingSpaces;
+					const tokenDecoration = hasContent
+						? headingTokenDecoration
+						: headingTokenSoloDecoration;
+					if (tokenTo > tokenFrom) {
+						builder.add(tokenFrom, tokenTo, tokenDecoration);
+					}
+					if (hasContent) {
+						if (textTo > tokenTo) {
+							builder.add(tokenTo, textTo, headingTextDecoration);
+						}
+					}
+				}
+			}
+			// Move to next line
 			if (line.to + 1 > view.state.doc.length) {
 				break;
 			}
@@ -319,14 +344,26 @@ function isInExcludedNode(tree: ReturnType<typeof syntaxTree>, pos: number): boo
 	);
 	while (node) {
 		const name = node.type.name;
+		// FIX 3: More comprehensive code block detection
+		// Check for various code block node types
 		if (
 			name.includes("Code") ||
+			name.includes("code") ||
+			name === "CodeBlock" ||
+			name === "FencedCode" ||
+			name === "IndentedCode" ||
+			name === "InlineCode" ||
 			name.includes("Math") ||
+			name.includes("math") ||
 			name.includes("HTML") ||
-			name === "Frontmatter"
+			name === "Frontmatter" ||
+			name === "CodeText"
 		) {
 			return true;
 		}
+		// FIX 2: Do NOT exclude Callout/Admonition nodes
+		// Negative headings should render in callouts just like native headings do
+		// (Callouts are NOT in the exclusion list)
 		node = node.parent;
 	}
 	return false;
