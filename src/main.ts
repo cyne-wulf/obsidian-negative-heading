@@ -58,7 +58,7 @@ export default class NegativeHeadingPlugin extends Plugin {
 		// Register toggle command
 		this.addCommand({
 			id: "toggle",
-			name: "Toggle negative heading",
+			name: "Smart toggle",
 			editorCallback: (editor: Editor) => {
 				smartToggleNegativeHeading(editor);
 			},
@@ -203,7 +203,7 @@ export default class NegativeHeadingPlugin extends Plugin {
 
 		const sample = document.createElement("span");
 		sample.className = "cm-comment";
-		sample.textContent = "comment";
+		sample.textContent = "Comment";
 
 		container.appendChild(sample);
 		document.body.appendChild(container);
