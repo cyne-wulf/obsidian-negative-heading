@@ -5,7 +5,13 @@
 import { Editor } from 'obsidian';
 import { EditorView } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
+import type { SyntaxNode } from '@lezer/common';
 import { LineInfo } from '../types';
+
+// Type extension for accessing CodeMirror 6 editor instance
+interface EditorWithCM extends Editor {
+  cm: EditorView;
+}
 
 // Regex patterns for detection
 // Note: Allow leading whitespace for toggle command (user might have indented text)
@@ -125,7 +131,7 @@ function isInExcludedNode(view: EditorView, lineNumber: number): boolean {
     const line = view.state.doc.line(lineNumber + 1); // CodeMirror lines are 1-indexed
     const pos = line.from;
 
-    let node: any = tree.resolveInner(pos, 1);
+    let node: SyntaxNode | null = tree.resolveInner(pos, 1);
     while (node) {
       const name = node.type.name;
       // Check for code blocks, math blocks, HTML, frontmatter
@@ -147,7 +153,7 @@ function isInExcludedNode(view: EditorView, lineNumber: number): boolean {
       node = node.parent;
     }
     return false;
-  } catch (e) {
+  } catch {
     // If we can't access the syntax tree, fail safe and allow the line
     return false;
   }
@@ -185,7 +191,7 @@ export function getEligibleLines(editor: Editor): LineInfo[] {
   const lines: LineInfo[] = [];
 
   // Get the EditorView for syntax tree access
-  const view = (editor as any).cm as EditorView;
+  const view = (editor as EditorWithCM).cm;
 
   for (let i = startLine; i <= endLine; i++) {
     const text = editor.getLine(i);

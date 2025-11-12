@@ -73,3 +73,11 @@ li .neg-heading.neg-h1 {
 	letter-spacing: 0.05em;
 	font-weight: 400;
 }
+
+/* Temporary invisible container for reading computed CSS values */
+.neg-heading-color-probe {
+	position: absolute;
+	pointer-events: none;
+	opacity: 0;
+	height: 0;
+}

@@ -48,17 +48,17 @@ const negativeHeadingViewPlugin = ViewPlugin.fromClass(
 );
 
 export default class NegativeHeadingPlugin extends Plugin {
-	async onload() {
+	onload() {
 		this.registerMarkdownPostProcessor((element, ctx) => {
 			this.transformMarkdown(element, ctx);
 		});
 		this.registerEditorExtension(negativeHeadingViewPlugin);
 		this.applyCommentColorFallback();
-		
-		// Register smart toggle command
+
+		// Register toggle command
 		this.addCommand({
-			id: "smart-toggle-negative-heading",
-			name: "Smart Toggle Negative Heading",
+			id: "toggle",
+			name: "Toggle negative heading",
 			editorCallback: (editor: Editor) => {
 				smartToggleNegativeHeading(editor);
 			},
@@ -144,14 +144,6 @@ export default class NegativeHeadingPlugin extends Plugin {
 			const headingEl = this.createHeadingElement(doc, fragment);
 			range.insertNode(headingEl);
 
-			// Apply inline styles for list items (fallback for CSS loading issues)
-			if (headingEl.closest('li')) {
-				headingEl.style.display = 'inline-block';
-				headingEl.style.marginBlock = '0';
-				headingEl.style.marginInlineStart = '0';
-				headingEl.style.verticalAlign = 'baseline';
-			}
-
 			removeDelimiterAfterHeading(lineEnd);
 			match = findNextHeadingMatch(block);
 		}
@@ -207,11 +199,7 @@ export default class NegativeHeadingPlugin extends Plugin {
 
 	private readCommentColor(): string | null {
 		const container = document.createElement("div");
-		container.style.position = "absolute";
-		container.style.pointerEvents = "none";
-		container.style.opacity = "0";
-		container.style.height = "0";
-		container.className = "cm-s-obsidian";
+		container.className = "cm-s-obsidian neg-heading-color-probe";
 
 		const sample = document.createElement("span");
 		sample.className = "cm-comment";
