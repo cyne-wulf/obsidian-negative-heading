@@ -3,7 +3,10 @@
 An Obsidian plugin that renders Discord-style `-# Heading` lines as compact, muted headings in all view modes (Reading View, Live Preview, and Source Mode). The rendered block keeps normal Markdown content (bold, italics, links) while the `-# ` marker is dimmed, creating lightweight subheadings perfect for organizing content without the visual weight of traditional headings.
 
 ## Features
-![Main Demo](https://private-user-images.githubusercontent.com/54266829/511137875-3407d475-066a-44aa-9df6-5261ae8610be.gif?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjI4OTg3NDYsIm5iZiI6MTc2Mjg5ODQ0NiwicGF0aCI6Ii81NDI2NjgyOS81MTExMzc4NzUtMzQwN2Q0NzUtMDY2YS00NGFhLTlkZjYtNTI2MWFlODYxMGJlLmdpZj9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTExMTElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUxMTExVDIyMDA0NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTgyYzVmMDRlMjAzNGFmMGJhNWVkMmVlZGNhZjQ2ZDVlNmNjNTcwMmQxMGZiMDA0NTIxYzhjYjI1MjY0Y2VjYzkmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.nbzw-xYXvD_-UwKIW4u177A9PBEHeHNapfW-owWlE68)
+![maindemo](https://github.com/user-attachments/assets/08f9f450-a1e7-4975-9589-3bbcf1fd747a)
+
+
+
 - **All View Modes**: Works seamlessly in Reading View, Live Preview, and Source Mode
 - **Semantic Rendering**: Reading View converts `-# Heading` into `<div role="heading" aria-level="7">` for proper accessibility
 - **CodeMirror Integration**: Source mode and Live Preview use decorations for real-time syntax highlighting
@@ -14,9 +17,9 @@ An Obsidian plugin that renders Discord-style `-# Heading` lines as compact, mut
 - **Theme Integration**: Uses `var(--text-muted)` / `var(--text-faint)` with intelligent fallbacks to theme comment color or neutral gray
 
 #### Some theme examples:
-![Theme 1](https://private-user-images.githubusercontent.com/54266829/511137597-7afd8e38-00ac-4efd-b8ae-f9e123d56316.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjI4OTg3NDYsIm5iZiI6MTc2Mjg5ODQ0NiwicGF0aCI6Ii81NDI2NjgyOS81MTExMzc1OTctN2FmZDhlMzgtMDBhYy00ZWZkLWI4YWUtZjllMTIzZDU2MzE2LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTExMTElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUxMTExVDIyMDA0NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTBkNmMwNDQ0OTM1YTA0ZDRlYjI2Y2I2NWVlNDA0NzdjZmU4YTFhZDBhMjE1NDdlNjE2ODg4NWQ5NGI3ZjAyYjYmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.f6XVDIgHDq1kEeiA31pKx4Wsx2xm_zyCELF3HclYTjM)
+<img width="572" height="226" alt="Theme Example 1" src="https://github.com/user-attachments/assets/004d4979-dd93-4d77-a68c-fcad7b7608f6" />
+<img width="504" height="218" alt="Theme Example 2" src="https://github.com/user-attachments/assets/62080a29-4c80-4ab4-981c-00a1ef9328ec" />
 
-![Theme 2](https://private-user-images.githubusercontent.com/54266829/511137757-4a7f531e-986e-46f0-a7cf-5e10b08d36f9.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjI4OTg3NDYsIm5iZiI6MTc2Mjg5ODQ0NiwicGF0aCI6Ii81NDI2NjgyOS81MTExMzc3NTctNGE3ZjUzMWUtOTg2ZS00NmYwLWE3Y2YtNWUxMGIwOGQzNmY5LnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTExMTElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUxMTExVDIyMDA0NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTY3YzY5MmNhMmQzMjI2ODU4NTBkY2M4NzQ5NjdkYzQ2NjYxNDE2NzdlOGVmNTk4NzFhYTI5MTQ0MjBiMDZmMzcmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.Nw9QCDS3kCXiyZeozQJBydNsXtqo5y41xUTLauiX4vQ)
 
 ## Usage
 
@@ -38,10 +41,9 @@ The plugin provides a **Smart toggle negative heading** command that intelligent
 - **List items**: Preserves list markers (`- `, `1. `, etc.) and inserts/removes the token after the marker.
 - **Cursor preservation**: Your cursor/selection position adjusts automatically after the transformation.
 
-**To use**: Open the command palette (`Ctrl/Cmd + P`) and search for "Smart Toggle Negative Heading", or assign a hotkey in Settings → Hotkeys.  
+**To use**: Open the command palette (`Ctrl/Cmd + P`) and search for "Smart Toggle Negative Heading", or assign a hotkey in Settings → Hotkeys. 
 
-![Command Demo with Hotkey](https://private-user-images.githubusercontent.com/54266829/511140006-d1a0b747-2986-47dc-ad5a-b0d86cd0ee40.gif?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjI4OTg3NDYsIm5iZiI6MTc2Mjg5ODQ0NiwicGF0aCI6Ii81NDI2NjgyOS81MTExNDAwMDYtZDFhMGI3NDctMjk4Ni00N2RjLWFkNWEtYjBkODZjZDBlZTQwLmdpZj9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNTExMTElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjUxMTExVDIyMDA0NlomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTI0ZWVhMWIyOWI4ZTA0NDJhNDM2MmYzM2YxNDA3YzcyMTgzMTVkODA0NDcyMDYxMjAxOWI3YTU5MDJiMjE2YzImWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.dT4qxH7lfZATQY6rrbJF1HfqZ2RKiDchMXNHYi6jpLI)
-
+![commandDemoWithHotkey](https://github.com/user-attachments/assets/0392ee0f-7a27-4618-8fc0-8b5f7cae7ebc)
 
 
 
