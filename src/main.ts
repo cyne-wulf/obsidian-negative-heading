@@ -1,6 +1,5 @@
 import { Plugin, MarkdownPostProcessorContext, Editor } from "obsidian";
 import { syntaxTree } from "@codemirror/language";
-import type { SyntaxNode } from "@lezer/common";
 import { RangeSetBuilder } from "@codemirror/state";
 import {
 	Decoration,
@@ -10,6 +9,7 @@ import {
 	ViewUpdate,
 } from "@codemirror/view";
 import { smartToggleNegativeHeading } from "./commands/toggle-command";
+import type { SyntaxNodeLike } from "./types";
 
 const NEG_HEADING_TOKEN_REGEX = /^-#\s+/;
 const ESCAPED_NEG_HEADING_REGEX = /^\\-#\s+/; // Detect escaped syntax \-#
@@ -326,10 +326,11 @@ function buildDecorations(view: EditorView): DecorationSet {
 }
 
 function isInExcludedNode(tree: ReturnType<typeof syntaxTree>, pos: number): boolean {
-	let node: SyntaxNode | null = tree.resolveInner(
-		Math.max(0, Math.min(pos, tree.length - 1)),
-		-1,
-	);
+	if (tree.length === 0) {
+		return false;
+	}
+	const resolvedPos = Math.max(0, Math.min(pos, tree.length - 1));
+	let node: SyntaxNodeLike | null = tree.resolveInner(resolvedPos, -1) as SyntaxNodeLike;
 	while (node) {
 		const name = node.type.name;
 		// FIX 3: More comprehensive code block detection

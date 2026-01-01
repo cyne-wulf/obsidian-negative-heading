@@ -38,3 +38,12 @@ export interface EditorState {
     head: EditorPosition;
   };
 }
+
+/**
+ * Minimal shape for the syntax tree nodes we traverse.
+ * Helps avoid depending directly on @lezer/common types.
+ */
+export interface SyntaxNodeLike {
+  type: { name: string };
+  parent: SyntaxNodeLike | null;
+}

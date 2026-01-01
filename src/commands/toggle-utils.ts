@@ -5,8 +5,7 @@
 import { Editor } from 'obsidian';
 import { EditorView } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
-import type { SyntaxNode } from '@lezer/common';
-import { LineInfo } from '../types';
+import { LineInfo, SyntaxNodeLike } from '../types';
 
 // Type extension for accessing CodeMirror 6 editor instance
 interface EditorWithCM extends Editor {
@@ -131,7 +130,7 @@ function isInExcludedNode(view: EditorView, lineNumber: number): boolean {
     const line = view.state.doc.line(lineNumber + 1); // CodeMirror lines are 1-indexed
     const pos = line.from;
 
-    let node: SyntaxNode | null = tree.resolveInner(pos, 1);
+    let node: SyntaxNodeLike | null = tree.resolveInner(pos, 1) as SyntaxNodeLike;
     while (node) {
       const name = node.type.name;
       // Check for code blocks, math blocks, HTML, frontmatter
