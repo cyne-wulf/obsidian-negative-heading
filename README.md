@@ -167,7 +167,7 @@ This project is licensed under the GPL License. See [LICENSE](LICENSE) for detai
 
 ## Changelog
 
-### 0.1.0 (Initial Release)
+### 1.0.0 (Initial Release)
 - Discord-style `-# Heading` syntax support
 - Smart Toggle Command with majority detection
 - Escape character support (`\-# `)
