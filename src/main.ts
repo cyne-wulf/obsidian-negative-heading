@@ -222,17 +222,10 @@ function buildDecorations(view: EditorView): DecorationSet {
 		while (pos <= to) {
 			const line = view.state.doc.lineAt(pos);
 			
-			// FIX 3: Enhanced code block detection
-			// Check if ANY part of the line is within a code/math block
-			// This prevents rendering inside code blocks more reliably
-			let isLineInCodeBlock = false;
-			for (let checkPos = line.from; checkPos <= line.to; checkPos++) {
-				if (isInExcludedNode(tree, checkPos)) {
-					isLineInCodeBlock = true;
-					break;
-				}
-			}
-			if (isLineInCodeBlock) {
+				// Check if the start of this line is inside a fenced code/math block.
+			// We only check line.from (the token position), NOT the whole line,
+			// because inline code within a line should not suppress the -# decoration.
+			if (isInExcludedNode(tree, line.from)) {
 				pos = line.to + 1;
 				continue;
 			}
@@ -277,43 +270,50 @@ function buildDecorations(view: EditorView): DecorationSet {
 						}
 					}
 				}
-			} else {
-				// Not a list item - use regular processing
-				// Skip indented lines - they should not be decorated as headings
-				if (/^[\s\t]/.test(line.text)) {
-					pos = line.to + 1;
-					continue;
+		} else {
+			// Not a list item - use regular processing
+			// Skip indented lines - they should not be decorated as headings
+			if (/^[\s\t]/.test(line.text)) {
+				pos = line.to + 1;
+				continue;
+			}
+
+			// Strip blockquote prefix(es) like "> " or ">> " etc.
+			const blockquoteMatch = line.text.match(/^((?:>\s*)+)/);
+			const quotePrefix = blockquoteMatch ? blockquoteMatch[1] : "";
+			const contentAfterQuote = line.text.slice(quotePrefix.length);
+			const contentOffset = quotePrefix.length;
+
+			// Skip escaped syntax \-# (matches native \# behavior)
+			if (ESCAPED_NEG_HEADING_REGEX.test(contentAfterQuote)) {
+				// FIX 1: Ensure we properly move to the next line
+				pos = line.to + 1;
+				continue;
+			}
+			// Only match if token is at the very start of the (quote-stripped) line
+			const tokenMatch = contentAfterQuote.match(/^-#\s+/);
+			if (tokenMatch) {
+				const tokenFrom = line.from + contentOffset;
+				const tokenTo = tokenFrom + tokenMatch[0].length;
+				const remainder = contentAfterQuote.slice(tokenMatch[0].length);
+				const hasContent = remainder.trim().length > 0;
+				const trailingSpaces = hasContent
+					? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
+					: remainder.length;
+				const textTo = line.to - trailingSpaces;
+				const tokenDecoration = hasContent
+					? headingTokenDecoration
+					: headingTokenSoloDecoration;
+				if (tokenTo > tokenFrom) {
+					builder.add(tokenFrom, tokenTo, tokenDecoration);
 				}
-				// Skip escaped syntax \-# (matches native \# behavior)
-				if (ESCAPED_NEG_HEADING_REGEX.test(line.text)) {
-					// FIX 1: Ensure we properly move to the next line
-					pos = line.to + 1;
-					continue;
-				}
-				// Only match if token is at the very start of the line
-				const tokenMatch = line.text.match(/^-#\s+/);
-				if (tokenMatch) {
-					const tokenFrom = line.from;
-					const tokenTo = tokenFrom + tokenMatch[0].length;
-					const remainder = line.text.slice(tokenMatch[0].length);
-					const hasContent = remainder.trim().length > 0;
-					const trailingSpaces = hasContent
-						? remainder.match(TRAILING_SPACE_REGEX)?.[0].length ?? 0
-						: remainder.length;
-					const textTo = line.to - trailingSpaces;
-					const tokenDecoration = hasContent
-						? headingTokenDecoration
-						: headingTokenSoloDecoration;
-					if (tokenTo > tokenFrom) {
-						builder.add(tokenFrom, tokenTo, tokenDecoration);
-					}
-					if (hasContent) {
-						if (textTo > tokenTo) {
-							builder.add(tokenTo, textTo, headingTextDecoration);
-						}
+				if (hasContent) {
+					if (textTo > tokenTo) {
+						builder.add(tokenTo, textTo, headingTextDecoration);
 					}
 				}
 			}
+		}
 			// Move to next line
 			if (line.to + 1 > view.state.doc.length) {
 				break;
