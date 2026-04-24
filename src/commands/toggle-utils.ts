@@ -19,18 +19,32 @@ const NEG_HEADING_TOKEN = /^(\s*)-#\s+/;
 const NEG_HEADING_IN_LIST = /^([\s]*([-*+]|\d+\.)\s+)-#\s+/;
 const ESCAPED_NEG_HEADING = /^\\-#/;
 const LIST_ITEM_PREFIX = /^([\s]*([-*+]|\d+\.)\s+)/;
+// Matches one or more blockquote markers, e.g. "> ", ">> ", "> > "
+const BLOCKQUOTE_PREFIX = /^((?:>\s*)+)/;
+
+/**
+ * Strip leading blockquote markers from a line, returning [prefix, rest].
+ */
+function splitBlockquote(text: string): [string, string] {
+  const m = text.match(BLOCKQUOTE_PREFIX);
+  if (!m) return ['', text];
+  return [m[1], text.slice(m[1].length)];
+}
 
 /**
  * Check if a line contains a negative heading token
  */
 export function isNegativeHeading(text: string): boolean {
+  // Strip blockquote prefix before checking
+  const [, content] = splitBlockquote(text);
+
   // Don't match escaped tokens
-  if (ESCAPED_NEG_HEADING.test(text)) {
+  if (ESCAPED_NEG_HEADING.test(content)) {
     return false;
   }
-  
+
   // Check for negative heading in list or at line start
-  return NEG_HEADING_TOKEN.test(text) || NEG_HEADING_IN_LIST.test(text);
+  return NEG_HEADING_TOKEN.test(content) || NEG_HEADING_IN_LIST.test(content);
 }
 
 /**
@@ -43,28 +57,29 @@ export function addNegativeHeadingToken(text: string): string {
     return text;
   }
 
-  // Check if it's a list item
-  const listMatch = text.match(LIST_ITEM_PREFIX);
+  // Peel off blockquote prefix first
+  const [quotePrefix, afterQuote] = splitBlockquote(text);
+
+  // Check if content after quote is a list item
+  const listMatch = afterQuote.match(LIST_ITEM_PREFIX);
   if (listMatch) {
-    const prefix = listMatch[1];
-    let content = text.slice(prefix.length);
+    const listPrefix = listMatch[1];
+    let content = afterQuote.slice(listPrefix.length);
 
     // Strip native heading markers from list item content
     content = content.replace(/^#{1,6}\s+/, '');
 
-    return `${prefix}-# ${content}`;
+    return `${quotePrefix}${listPrefix}-# ${content}`;
   }
 
   // Preserve leading whitespace for non-list items
-  // Even though the rendering logic will skip indented content,
-  // the toggle command should allow it for user convenience
-  const leadingSpaces = text.match(/^(\s*)/)?.[1] || '';
-  let content = text.slice(leadingSpaces.length);
+  const leadingSpaces = afterQuote.match(/^(\s*)/)?.[1] || '';
+  let content = afterQuote.slice(leadingSpaces.length);
 
   // Strip native Markdown heading markers (# through ######)
   content = content.replace(/^#{1,6}\s+/, '');
 
-  return `${leadingSpaces}-# ${content}`;
+  return `${quotePrefix}${leadingSpaces}-# ${content}`;
 }
 
 /**
@@ -81,20 +96,23 @@ export function removeNegativeHeadingToken(text: string): string {
     return text;
   }
 
+  // Peel off blockquote prefix first
+  const [quotePrefix, afterQuote] = splitBlockquote(text);
+
   // Handle list items with negative heading
-  const listMatch = text.match(/^([\s]*([-*+]|\d+\.)\s+)-#\s+/);
+  const listMatch = afterQuote.match(/^([\s]*([-*+]|\d+\.)\s+)-#\s+/);
   if (listMatch) {
     const prefix = listMatch[1];
-    const afterToken = text.slice(listMatch[0].length);
-    return `${prefix}${afterToken}`;
+    const afterToken = afterQuote.slice(listMatch[0].length);
+    return `${quotePrefix}${prefix}${afterToken}`;
   }
 
   // Handle simple negative heading (with optional leading whitespace)
-  const simpleMatch = text.match(/^(\s*)-#\s+/);
+  const simpleMatch = afterQuote.match(/^(\s*)-#\s+/);
   if (simpleMatch) {
     const leadingSpaces = simpleMatch[1];
-    const afterToken = text.slice(simpleMatch[0].length);
-    return `${leadingSpaces}${afterToken}`;
+    const afterToken = afterQuote.slice(simpleMatch[0].length);
+    return `${quotePrefix}${leadingSpaces}${afterToken}`;
   }
 
   return text;

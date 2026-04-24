@@ -272,7 +272,8 @@ function buildDecorations(view: EditorView): DecorationSet {
 				}
 		} else {
 			// Not a list item - use regular processing
-			// Skip indented lines - they should not be decorated as headings
+			// Skip indented lines - they should not be decorated as headings.
+			// (A future setting `allowIndentedSyntax` will override this.)
 			if (/^[\s\t]/.test(line.text)) {
 				pos = line.to + 1;
 				continue;
@@ -281,8 +282,19 @@ function buildDecorations(view: EditorView): DecorationSet {
 			// Strip blockquote prefix(es) like "> " or ">> " etc.
 			const blockquoteMatch = line.text.match(/^((?:>\s*)+)/);
 			const quotePrefix = blockquoteMatch ? blockquoteMatch[1] : "";
-			const contentAfterQuote = line.text.slice(quotePrefix.length);
-			const contentOffset = quotePrefix.length;
+			let contentAfterQuote = line.text.slice(quotePrefix.length);
+			let contentOffset = quotePrefix.length;
+
+			// After blockquote prefix, also strip an optional list marker
+			// e.g. "> - -# Heading" → strips "> " then "- " → matches "-# Heading"
+			if (quotePrefix.length > 0) {
+				const listMarkerMatch = contentAfterQuote.match(/^((?:[-*+]|\d+\.)\s+)/);
+				if (listMarkerMatch) {
+					const markerLen = listMarkerMatch[1].length;
+					contentOffset += markerLen;
+					contentAfterQuote = contentAfterQuote.slice(markerLen);
+				}
+			}
 
 			// Skip escaped syntax \-# (matches native \# behavior)
 			if (ESCAPED_NEG_HEADING_REGEX.test(contentAfterQuote)) {
