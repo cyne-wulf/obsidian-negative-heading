@@ -20,13 +20,14 @@ export function smartToggleNegativeHeading(editor: Editor): void {
   // Analyze lines to determine operation
   const analysis = analyzeLines(eligibleLines);
 
-  // Store selection state before transformation
+  // Store cursor/selection state BEFORE transformation
   const selectionRange = editor.somethingSelected()
     ? {
         anchor: editor.getCursor("anchor"),
         head: editor.getCursor("head"),
       }
     : null;
+  const cursorPosBefore = selectionRange ? null : editor.getCursor();
 
   // Execute transformations (Obsidian batches these automatically)
   for (const lineInfo of eligibleLines) {
@@ -61,10 +62,9 @@ export function smartToggleNegativeHeading(editor: Editor): void {
 
     editor.setSelection(anchorAdjusted, headAdjusted);
   } else {
-    // Single cursor: adjust position
-    const cursorPos = editor.getCursor();
+    // Single cursor: adjust position based on saved pre-transform cursor
     const adjustedPos = adjustPosition(
-      cursorPos,
+      cursorPosBefore!,
       eligibleLines,
       analysis.operation
     );
@@ -79,7 +79,7 @@ export function smartToggleNegativeHeading(editor: Editor): void {
  */
 function adjustPosition(
   pos: EditorPosition,
-  eligibleLines: Array<{ lineNumber: number }>,
+  eligibleLines: Array<{ lineNumber: number; text: string }>,
   operation: "SET" | "UNSET"
 ): EditorPosition {
   // Check if position is on an eligible line
@@ -95,7 +95,7 @@ function adjustPosition(
   const tokenLength = 3; // "-# " length
   const offset = operation === "SET" ? tokenLength : -tokenLength;
 
-  // Adjust character position, but don't go negative
+  // Adjust character position, but don't go negative or past line end
   const newCh = Math.max(0, pos.ch + offset);
 
   return {
